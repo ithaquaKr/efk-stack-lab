@@ -1,4 +1,16 @@
-FROM fluentd:v1.16.0-debian-1.0
+FROM fluent/fluentd:v1.14-1
 USER root
-RUN ["gem", "install", "fluent-plugin-elasticsearch", "--no-document", "--version", "3.5.2"]
+
+RUN apk add --no-cache --update --virtual .build-deps \
+    sudo build-base ruby-dev \
+    && gem install elasticsearch -v 7.17.0 \
+    && gem install fluent-plugin-elasticsearch \
+    && gem sources --clear-all \
+    && apk del .build-deps \
+    && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem
+
+# copy fluentd configuration from host image
+# COPY ./conf/fluent.conf /fluentd/etc/
+
+# USER fluent
 USER fluent
