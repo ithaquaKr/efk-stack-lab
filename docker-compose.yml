@@ -32,6 +32,7 @@ services:
 
   fluent-bit:
     image: fluent/fluent-bit:1.4.3
+    container_name: fluent-bit
     command: /fluent-bit/bin/fluent-bit -c /fluent-bit/config/fluent-bit.conf  
     restart: always
     ports:
@@ -51,6 +52,7 @@ services:
         
   fluentd: 
     build: ./fluentd
+    container_name: fluentd
     restart: unless-stopped
     links:
       - elasticsearch
@@ -62,16 +64,20 @@ services:
 
   elasticsearch:
     image: elasticsearch:7.17.0
-    expose:
-      - 9200
+    container_name: elasticsearch
+    ports:
+      - 9200:9200
+      - 9600:9600 # required for Performance Analyzer
     environment:
       - discovery.type=single-node
+      - xpack.security.enabled=false
     volumes:
       - esdata:/usr/share/elasticsearch/data
     
 
   kibana:
     image: kibana:7.17.0
+    container_name: kibana
     links:
       - elasticsearch
     depends_on:
