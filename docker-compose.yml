@@ -1,60 +1,82 @@
-version: "3.3"
+version: "3"
+
+volumes:
+  esdata:
 
 services:
+  node-exporter:
+    image: prom/node-exporter:v1.3.1
+    container_name: node_exporter
+    links:
+      - fluentd
+    depends_on:
+      - fluentd
+    restart: always
+    user: root
+    privileged: true
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc|var/lib/docker/containers|var/lib/docker/overlay2|run/docker/netns|var/lib/docker/aufs)($$|/)"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "0.0.0.0:24224"
+        fluentd-retry-wait: 3s
+
+
+  fluent-bit:
+    image: fluent/fluent-bit:1.4.3
+    command: /fluent-bit/bin/fluent-bit -c /fluent-bit/config/fluent-bit.conf  
+    restart: always
+    ports:
+      - "43000:43000"
+      - "43000:43000/udp"
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/config/fluent-bit.conf
+    links:
+      - fluentd
+    depends_on:
+      - fluentd
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "0.0.0.0:24224"
+        fluentd-retry-wait: 3s
+        
+  fluentd: 
+    build: ./fluentd
+    restart: unless-stopped
+    links:
+      - elasticsearch
+    depends_on:
+      - elasticsearch
+    ports:
+      - 24224:24224
+      - 24224:24224/udp
+
   elasticsearch:
     image: elasticsearch:7.17.0
-    container_name: elasticsearch
-    restart: always
+    expose:
+      - 9200
     environment:
-      - discovery.type=single-node # Runs as a single-node
-      - xpack.security.enabled=false
+      - discovery.type=single-node
     volumes:
-      - elasticsearch:/usr/share/elasticsearch/data
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - 9200:9200
-      - 9600:9600 # required for Performance Analyzer
-    networks:
-      - traefik-net
+      - esdata:/usr/share/elasticsearch/data
+    
+
   kibana:
     image: kibana:7.17.0
-    container_name: kibana
-    restart: always
-    links: # Links kibana service to the elasticsearch container
+    links:
       - elasticsearch
     depends_on:
       - elasticsearch
     ports:
       - 5601:5601
-    expose:
-      - "5601"
     environment:
-      # ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-      # - FLUENT_ELASTICSEARCH_HOST=elasticsearch
-      # - FLUENT_ELASTICSEARCH_PORT=9200
-      # - FLUENT_ELASTICSEARCH_SCHEME=http
-    networks:
-      - traefik-net
-  fluentd:
-    build: ./fluentd
-    volumes:
-      - ./fluentd/conf:/fluentd/etc
-    links:
-      - "elasticsearch"
-    restart: always
-    container_name: fluentd
-    ports:
-      - "24224:24224"
-      - "24224:24224/udp"
-    networks:
-      - traefik-net
-
-volumes:
-  elasticsearch:
-
-networks:
-  traefik-net:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
